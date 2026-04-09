@@ -516,7 +516,7 @@ def build_archive():
 
 
 def build_viewer(volumes: list[dict]):
-    """볼륨 타임라인 + 페이지 뷰어 + 검색이 포함된 SPA HTML을 생성합니다."""
+    """Firebase 연동 뷰어 (이미지 + 직접 전사 입력 + 댓글)."""
     volumes_json = json.dumps(volumes, ensure_ascii=False)
 
     html = f"""<!DOCTYPE html>
@@ -528,79 +528,83 @@ def build_viewer(volumes: list[dict]):
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{font-family:"Malgun Gothic","Apple Gothic",sans-serif;background:#f5f0e8;color:#333;min-height:100vh}}
-
-/* ── 헤더 ── */
-.site-header{{background:#3d2b1f;color:#f5efe4;padding:0 24px;display:flex;align-items:center;gap:16px;height:56px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}}
-.site-header h1{{font-size:1.25rem;font-weight:700;letter-spacing:-.5px;cursor:pointer}}
-.site-header h1 span{{font-size:.8rem;opacity:.6;margin-left:8px;font-weight:400}}
-.header-search{{flex:1;max-width:360px;position:relative}}
-.header-search input{{width:100%;padding:6px 12px 6px 32px;border:none;border-radius:20px;background:rgba(255,255,255,.15);color:#fff;font-size:.9rem;outline:none}}
-.header-search input::placeholder{{color:rgba(255,255,255,.5)}}
+.site-header{{background:#3d2b1f;color:#f5efe4;padding:0 20px;display:flex;align-items:center;gap:14px;height:54px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}}
+.site-header h1{{font-size:1.15rem;font-weight:700;cursor:pointer;white-space:nowrap}}
+.site-header h1 span{{font-size:.75rem;opacity:.6;margin-left:6px;font-weight:400}}
+.header-search{{flex:1;max-width:320px;position:relative}}
+.header-search input{{width:100%;padding:6px 12px 6px 30px;border:none;border-radius:18px;background:rgba(255,255,255,.15);color:#fff;font-size:.88rem;outline:none}}
+.header-search input::placeholder{{color:rgba(255,255,255,.45)}}
 .header-search input:focus{{background:rgba(255,255,255,.25)}}
-.search-icon{{position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:.6;font-size:.85rem}}
-.header-nav{{margin-left:auto;display:flex;gap:8px}}
-.nav-btn{{background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 14px;border-radius:16px;cursor:pointer;font-size:.85rem}}
-.nav-btn:hover{{background:rgba(255,255,255,.25)}}
-.nav-btn.active{{background:rgba(255,255,255,.3);font-weight:600}}
-
-/* ── 홈: 타임라인 ── */
-#home-view{{max-width:1100px;margin:0 auto;padding:32px 16px}}
-.timeline-year{{margin-bottom:40px}}
-.year-label{{font-size:1.4rem;font-weight:700;color:#3d2b1f;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #c8b89a;display:flex;align-items:center;gap:12px}}
+.search-icon{{position:absolute;left:9px;top:50%;transform:translateY(-50%);opacity:.55;font-size:.8rem}}
+#home-view{{max-width:1100px;margin:0 auto;padding:28px 16px}}
+.timeline-year{{margin-bottom:36px}}
+.year-label{{font-size:1.3rem;font-weight:700;color:#3d2b1f;margin-bottom:14px;padding-bottom:7px;border-bottom:2px solid #c8b89a;display:flex;align-items:center;gap:10px}}
 .year-label::after{{content:"";flex:1;height:1px;background:#e0d0bc}}
-.vol-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}}
-.vol-card{{background:#fffdf7;border:1px solid #e0d0bc;border-radius:12px;overflow:hidden;cursor:pointer;transition:all .2s}}
-.vol-card:hover{{box-shadow:0 6px 20px rgba(0,0,0,.15);transform:translateY(-2px)}}
-.vol-cover{{width:100%;aspect-ratio:3/4;object-fit:cover;background:#e8dfd0;display:flex;align-items:center;justify-content:center;color:#a09070;font-size:.85rem}}
+.vol-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}}
+.vol-card{{background:#fffdf7;border:1px solid #e0d0bc;border-radius:10px;overflow:hidden;cursor:pointer;transition:all .2s}}
+.vol-card:hover{{box-shadow:0 5px 18px rgba(0,0,0,.14);transform:translateY(-2px)}}
+.vol-cover{{width:100%;aspect-ratio:3/4;overflow:hidden;background:#e8dfd0}}
 .vol-cover img{{width:100%;height:100%;object-fit:cover}}
-.vol-cover-placeholder{{width:100%;aspect-ratio:3/4;background:linear-gradient(135deg,#e8dfd0,#d4c4a8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#8b7355}}
-.vol-info{{padding:12px}}
-.vol-title{{font-size:.9rem;font-weight:600;color:#3d2b1f;margin-bottom:4px;line-height:1.3}}
-.vol-meta{{font-size:.75rem;color:#8b7355}}
-
-/* ── 볼륨 뷰어 ── */
-#viewer-view{{display:none;height:calc(100vh - 56px);flex-direction:column}}
-.viewer-toolbar{{background:#fff;border-bottom:1px solid #e0d0bc;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}}
-.back-btn{{background:#f0e8dc;border:1px solid #c8b89a;color:#3d2b1f;padding:5px 14px;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:600}}
+.vol-info{{padding:10px 12px}}
+.vol-title{{font-size:.85rem;font-weight:600;color:#3d2b1f;margin-bottom:3px;line-height:1.3}}
+.vol-meta{{font-size:.72rem;color:#8b7355}}
+#viewer-view{{display:none;height:calc(100vh - 54px);flex-direction:column}}
+.viewer-toolbar{{background:#fff;border-bottom:1px solid #e0d0bc;padding:8px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}}
+.back-btn{{background:#f0e8dc;border:1px solid #c8b89a;color:#3d2b1f;padding:4px 12px;border-radius:7px;cursor:pointer;font-size:.82rem;font-weight:600}}
 .back-btn:hover{{background:#e8dccf}}
-.viewer-title{{font-size:1rem;font-weight:700;color:#3d2b1f;flex:1}}
-.page-nav{{display:flex;align-items:center;gap:8px}}
-.page-btn{{background:#f0e8dc;border:1px solid #c8b89a;color:#3d2b1f;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center}}
+.viewer-title{{font-size:.95rem;font-weight:700;color:#3d2b1f;flex:1}}
+.page-nav{{display:flex;align-items:center;gap:6px}}
+.page-btn{{background:#f0e8dc;border:1px solid #c8b89a;color:#3d2b1f;width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:.95rem;display:flex;align-items:center;justify-content:center}}
 .page-btn:hover:not(:disabled){{background:#e8dccf}}
 .page-btn:disabled{{opacity:.3;cursor:default}}
-.page-indicator{{font-size:.85rem;color:#6b5a48;min-width:80px;text-align:center}}
+.page-indicator{{font-size:.82rem;color:#6b5a48;min-width:72px;text-align:center}}
 .viewer-body{{flex:1;display:flex;overflow:hidden}}
-.viewer-image-pane{{flex:1;overflow:auto;background:#1a1a1a;display:flex;align-items:center;justify-content:center;padding:12px}}
-.viewer-image-pane img{{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.6)}}
-
-/* ── 검색 결과 ── */
-#search-view{{display:none;max-width:900px;margin:0 auto;padding:24px 16px}}
-.search-results-header{{margin-bottom:20px;color:#6b5a48;font-size:.9rem}}
-.result-card{{background:#fffdf7;border:1px solid #e0d0bc;border-radius:10px;padding:16px;margin-bottom:12px;cursor:pointer;transition:box-shadow .15s}}
-.result-card:hover{{box-shadow:0 4px 12px rgba(0,0,0,.1)}}
-.result-vol{{font-size:.75rem;color:#9b8870;margin-bottom:4px}}
-.result-summary{{font-size:.9rem;color:#444;line-height:1.6;margin-top:6px}}
-.result-content{{font-size:.8rem;color:#777;margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}}
+.viewer-image-pane{{flex:1;overflow:auto;background:#1a1a1a;display:flex;align-items:flex-start;justify-content:center;padding:12px}}
+.viewer-image-pane img{{max-width:100%;object-fit:contain;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.6)}}
+.viewer-side{{width:360px;flex-shrink:0;overflow-y:auto;background:#fffdf7;border-left:1px solid #e0d0bc;display:flex;flex-direction:column}}
+.side-section{{padding:16px;border-bottom:1px solid #ede3d3}}
+.side-section:last-child{{border-bottom:none;flex:1}}
+.side-label{{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9b8870;margin-bottom:8px}}
+.trans-area{{width:100%;min-height:120px;border:1px solid #d4c8b4;border-radius:8px;padding:10px;font-size:.88rem;font-family:inherit;line-height:1.7;resize:vertical;background:#fdf9f3;color:#333;outline:none}}
+.trans-area:focus{{border-color:#a08060;background:#fff}}
+.trans-meta{{font-size:.72rem;color:#a09070;margin-top:5px;min-height:16px}}
+.trans-footer{{display:flex;align-items:center;gap:8px;margin-top:8px}}
+.nick-input{{flex:1;padding:5px 10px;border:1px solid #d4c8b4;border-radius:6px;font-size:.82rem;background:#fdf9f3;outline:none}}
+.nick-input:focus{{border-color:#a08060}}
+.save-btn{{background:#3d2b1f;color:#f5efe4;border:none;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600;white-space:nowrap}}
+.save-btn:hover{{background:#5a3f2e}}
+.save-btn:disabled{{opacity:.5;cursor:default}}
+.comment-list{{display:flex;flex-direction:column;gap:10px;margin-bottom:12px;min-height:20px}}
+.comment-item{{background:#f5f0e8;border-radius:8px;padding:10px 12px}}
+.comment-author{{font-size:.78rem;font-weight:700;color:#3d2b1f;margin-bottom:3px}}
+.comment-text{{font-size:.85rem;color:#444;line-height:1.6;white-space:pre-wrap;word-break:break-word}}
+.comment-time{{font-size:.68rem;color:#aaa;margin-top:4px}}
+.comment-form{{display:flex;flex-direction:column;gap:6px}}
+.comment-nick{{padding:6px 10px;border:1px solid #d4c8b4;border-radius:6px;font-size:.82rem;background:#fdf9f3;outline:none}}
+.comment-nick:focus{{border-color:#a08060}}
+.comment-text-input{{padding:8px 10px;border:1px solid #d4c8b4;border-radius:6px;font-size:.85rem;font-family:inherit;resize:none;background:#fdf9f3;outline:none;line-height:1.6}}
+.comment-text-input:focus{{border-color:#a08060}}
+.comment-submit{{background:#3d2b1f;color:#f5efe4;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600;align-self:flex-end}}
+.comment-submit:hover{{background:#5a3f2e}}
+.loading-dot{{color:#bbb;font-size:.8rem;font-style:italic}}
+#search-view{{display:none;max-width:860px;margin:0 auto;padding:24px 16px}}
+.result-card{{background:#fffdf7;border:1px solid #e0d0bc;border-radius:9px;padding:14px;margin-bottom:10px;cursor:pointer;transition:box-shadow .15s}}
+.result-card:hover{{box-shadow:0 3px 10px rgba(0,0,0,.1)}}
+.result-vol{{font-size:.72rem;color:#9b8870;margin-bottom:4px}}
 mark{{background:#ffe066;border-radius:2px;padding:0 2px}}
 </style>
 </head>
 <body>
-
 <header class="site-header">
   <h1 onclick="showHome()">열린마음 <span>아카이브</span></h1>
   <div class="header-search">
     <span class="search-icon">🔍</span>
-    <input type="text" id="global-search" placeholder="내용, 작성자 검색..." oninput="onSearch(this.value)">
+    <input type="text" id="global-search" placeholder="볼륨·페이지 검색..." oninput="onSearch(this.value)">
   </div>
-  <nav class="header-nav">
-    <button class="nav-btn" id="nav-home" onclick="showHome()">연도별 보기</button>
-  </nav>
 </header>
 
-<!-- 홈 뷰 -->
 <div id="home-view"></div>
 
-<!-- 볼륨 뷰어 -->
 <div id="viewer-view">
   <div class="viewer-toolbar">
     <button class="back-btn" onclick="showHome()">← 목록</button>
@@ -615,27 +619,67 @@ mark{{background:#ffe066;border-radius:2px;padding:0 2px}}
     <div class="viewer-image-pane">
       <img id="viewer-img" src="" alt="">
     </div>
+    <div class="viewer-side">
+      <!-- 전사 섹션 -->
+      <div class="side-section">
+        <div class="side-label">✏️ 직접 전사 (내용 타이핑)</div>
+        <textarea class="trans-area" id="trans-area" placeholder="이 페이지의 손글씨 내용을 읽어서 직접 입력해주세요..."></textarea>
+        <div class="trans-meta" id="trans-meta"></div>
+        <div class="trans-footer">
+          <input class="nick-input" id="trans-nick" placeholder="닉네임 (선택)" maxlength="20">
+          <button class="save-btn" id="trans-save" onclick="saveTranscription()">저장</button>
+        </div>
+      </div>
+      <!-- 댓글 섹션 -->
+      <div class="side-section">
+        <div class="side-label">💬 댓글</div>
+        <div class="comment-list" id="comment-list"><span class="loading-dot">불러오는 중...</span></div>
+        <div class="comment-form">
+          <input class="comment-nick" id="comment-nick" placeholder="닉네임" maxlength="20">
+          <textarea class="comment-text-input" id="comment-text" rows="2" placeholder="이 페이지에 대한 추억이나 기억을 남겨주세요..."></textarea>
+          <button class="comment-submit" onclick="submitComment()">댓글 달기</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
-<!-- 검색 결과 -->
 <div id="search-view"></div>
 
-<script>
-const VOLUMES = {volumes_json};
+<!-- Firebase SDK -->
+<script type="module">
+import {{ initializeApp }} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {{ getFirestore, doc, getDoc, setDoc, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp }} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// 볼륨 맵 (id → volume)
+const firebaseConfig = {{
+  apiKey: "AIzaSyBYA3D-MgA2MeTUgQOuDFdBZ4nz1iOzzXk",
+  authDomain: "yeollinmaeum-c96fd.firebaseapp.com",
+  projectId: "yeollinmaeum-c96fd",
+  storageBucket: "yeollinmaeum-c96fd.firebasestorage.app",
+  messagingSenderId: "581876102843",
+  appId: "1:581876102843:web:ae43f8363be561478a9b9e"
+}};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const VOLUMES = {volumes_json};
 const volMap = {{}};
 VOLUMES.forEach(v => volMap[v.id] = v);
 
-// ── 홈 렌더링 ──────────────────────────────────────────────────────────────
-function showHome() {{
+let currentVol = null;
+let currentPageIdx = 0;
+let unsubComments = null;
+
+// ── 홈 ────────────────────────────────────────────────────────────────────
+window.showHome = function() {{
   document.getElementById("global-search").value = "";
   document.getElementById("home-view").style.display = "block";
   document.getElementById("viewer-view").style.display = "none";
   document.getElementById("search-view").style.display = "none";
+  if (unsubComments) {{ unsubComments(); unsubComments = null; }}
   renderHome();
-}}
+}};
 
 function renderHome() {{
   const years = {{}};
@@ -644,146 +688,192 @@ function renderHome() {{
     if (!years[y]) years[y] = [];
     years[y].push(v);
   }});
-
-  const sortedYears = Object.keys(years).sort((a, b) => {{
-    if (a === "연도 미상") return 1;
-    if (b === "연도 미상") return -1;
-    return Number(a) - Number(b);
-  }});
-
+  const sortedYears = Object.keys(years).sort((a,b) => a==="연도 미상"?1:b==="연도 미상"?-1:Number(a)-Number(b));
   const totalVols = VOLUMES.length;
-  const totalPages = VOLUMES.reduce((s, v) => s + (v.page_count || 0), 0);
+  const totalPages = VOLUMES.reduce((s,v)=>s+(v.page_count||0),0);
 
-  let html = `<div style="background:#3d2b1f;color:#f5efe4;padding:32px 24px;margin-bottom:32px">
-    <h2 style="font-size:1.8rem;margin-bottom:8px">열린마음 아카이브</h2>
-    <p style="opacity:.7;font-size:.95rem">1990년대 ~ 2000년대 학과 방명록 &amp; 일상 기록 디지털 보존</p>
-    <div style="display:flex;gap:32px;margin-top:20px">
-      <div><div style="font-size:2rem;font-weight:700">${{totalVols}}</div><div style="opacity:.6;font-size:.85rem">권</div></div>
-      <div><div style="font-size:2rem;font-weight:700">${{totalPages}}</div><div style="opacity:.6;font-size:.85rem">페이지</div></div>
+  let html = `<div style="background:#3d2b1f;color:#f5efe4;padding:28px 20px;margin-bottom:28px">
+    <h2 style="font-size:1.7rem;margin-bottom:6px">열린마음 아카이브</h2>
+    <p style="opacity:.65;font-size:.9rem">1990년대 ~ 2000년대 학과 방명록 &amp; 일상 기록</p>
+    <div style="display:flex;gap:28px;margin-top:16px">
+      <div><div style="font-size:1.8rem;font-weight:700">${{totalVols}}</div><div style="opacity:.55;font-size:.8rem">권</div></div>
+      <div><div style="font-size:1.8rem;font-weight:700">${{totalPages}}</div><div style="opacity:.55;font-size:.8rem">페이지</div></div>
     </div>
   </div>`;
 
   sortedYears.forEach(year => {{
-    html += `<div class="timeline-year">
-      <div class="year-label">${{year}}년</div>
-      <div class="vol-grid">`;
+    html += `<div class="timeline-year"><div class="year-label">${{year}}년</div><div class="vol-grid">`;
     years[year].forEach(vol => {{
-      const cover = vol.cover ? `<img src="input/${{vol.cover}}" alt="표지" onerror="this.parentElement.innerHTML='<div style=\\"width:100%;aspect-ratio:3/4;background:linear-gradient(135deg,#e8dfd0,#d4c4a8);display:flex;align-items:center;justify-content:center;color:#8b7355;font-size:.8rem;text-align:center;padding:16px\\">${{vol.short_title || vol.title}}</div>'">` :
-        `<div style="width:100%;aspect-ratio:3/4;background:linear-gradient(135deg,#e8dfd0,#d4c4a8);display:flex;align-items:center;justify-content:center;color:#8b7355;font-size:.8rem;text-align:center;padding:16px">${{vol.short_title || vol.title}}</div>`;
+      const cover = vol.cover
+        ? `<img src="input/${{vol.cover}}" alt="표지" onerror="this.style.display='none'">`
+        : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#e8dfd0,#d4c4a8);display:flex;align-items:center;justify-content:center;color:#8b7355;font-size:.78rem;text-align:center;padding:12px">${{vol.short_title||vol.title}}</div>`;
       html += `<div class="vol-card" onclick="openVolume('${{vol.id}}')">
         <div class="vol-cover">${{cover}}</div>
-        <div class="vol-info">
-          <div class="vol-title">${{vol.title}}</div>
-          <div class="vol-meta">${{vol.page_count || 0}}페이지</div>
-        </div>
+        <div class="vol-info"><div class="vol-title">${{vol.title}}</div><div class="vol-meta">${{vol.page_count||0}}페이지</div></div>
       </div>`;
     }});
     html += `</div></div>`;
   }});
-
   document.getElementById("home-view").innerHTML = html;
 }}
 
-// ── 볼륨 뷰어 ──────────────────────────────────────────────────────────────
-let currentVol = null;
-let currentPageIdx = 0;
-
-function openVolume(volId, pageIdx) {{
+// ── 뷰어 ──────────────────────────────────────────────────────────────────
+window.openVolume = function(volId, pageIdx=0) {{
   currentVol = volMap[volId];
-  currentPageIdx = pageIdx || 0;
+  currentPageIdx = pageIdx;
   if (!currentVol) return;
-
   document.getElementById("home-view").style.display = "none";
   document.getElementById("search-view").style.display = "none";
-  const vv = document.getElementById("viewer-view");
-  vv.style.display = "flex";
+  document.getElementById("viewer-view").style.display = "flex";
   document.getElementById("viewer-title").textContent = currentVol.title;
-
   renderPage();
+}};
+
+function pageKey(page) {{
+  return (page.volume_id||"") + "__" + (page.page_label||page.filename||"");
 }}
 
-function renderPage() {{
+async function renderPage() {{
   const pages = currentVol.pages || [];
   const total = pages.length;
-  if (total === 0) return;
-
+  if (!total) return;
   const page = pages[currentPageIdx];
 
-  // 이미지
-  const img = document.getElementById("viewer-img");
-  img.src = `input/${{page.filename}}`;
-  img.alt = page.page_label || "";
-
-  // 페이지 표시
-  const label = page.page_label === "cover_front" ? "앞표지" :
-                page.page_label === "cover_back" ? "뒷표지" :
-                `${{currentPageIdx + 1}} / ${{total}}`;
+  document.getElementById("viewer-img").src = `input/${{page.filename}}`;
+  const label = page.page_label==="cover_front"?"앞표지":page.page_label==="cover_back"?"뒷표지":`${{currentPageIdx+1}} / ${{total}}`;
   document.getElementById("page-indicator").textContent = label;
-  document.getElementById("btn-prev").disabled = currentPageIdx === 0;
-  document.getElementById("btn-next").disabled = currentPageIdx >= total - 1;
+  document.getElementById("btn-prev").disabled = currentPageIdx===0;
+  document.getElementById("btn-next").disabled = currentPageIdx>=total-1;
+  document.querySelector(".viewer-image-pane").scrollTop = 0;
 
+  // 전사 로드
+  document.getElementById("trans-area").value = "";
+  document.getElementById("trans-meta").textContent = "불러오는 중...";
+  const key = pageKey(page);
+  try {{
+    const snap = await getDoc(doc(db, "transcriptions", key));
+    if (snap.exists()) {{
+      const d = snap.data();
+      document.getElementById("trans-area").value = d.text || "";
+      const ts = d.updated_at?.toDate?.();
+      const who = d.author ? `${{d.author}} · ` : "";
+      document.getElementById("trans-meta").textContent = ts ? `${{who}}${{ts.toLocaleDateString("ko-KR")}} 마지막 수정` : (who ? who.slice(0,-3) : "");
+    }} else {{
+      document.getElementById("trans-meta").textContent = "아직 전사된 내용이 없습니다. 직접 입력해주세요!";
+    }}
+  }} catch(e) {{
+    document.getElementById("trans-meta").textContent = "";
+  }}
+
+  // 댓글 실시간 구독
+  if (unsubComments) {{ unsubComments(); unsubComments = null; }}
+  document.getElementById("comment-list").innerHTML = `<span class="loading-dot">불러오는 중...</span>`;
+  const commRef = collection(db, "comments", key, "items");
+  const q = query(commRef, orderBy("created_at", "asc"));
+  unsubComments = onSnapshot(q, snap => {{
+    const list = document.getElementById("comment-list");
+    if (!list) return;
+    if (snap.empty) {{
+      list.innerHTML = `<span style="color:#bbb;font-size:.8rem;font-style:italic">첫 댓글을 남겨보세요!</span>`;
+    }} else {{
+      list.innerHTML = snap.docs.map(d => {{
+        const c = d.data();
+        const ts = c.created_at?.toDate?.();
+        const timeStr = ts ? ts.toLocaleDateString("ko-KR") + " " + ts.toLocaleTimeString("ko-KR", {{hour:"2-digit",minute:"2-digit"}}) : "";
+        return `<div class="comment-item">
+          <div class="comment-author">${{c.author||"익명"}}</div>
+          <div class="comment-text">${{c.text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}}</div>
+          <div class="comment-time">${{timeStr}}</div>
+        </div>`;
+      }}).join("");
+    }}
+  }});
 }}
 
-function changePage(delta) {{
-  const pages = currentVol ? currentVol.pages : [];
+window.changePage = function(delta) {{
+  const pages = currentVol?.pages||[];
   const newIdx = currentPageIdx + delta;
-  if (newIdx < 0 || newIdx >= pages.length) return;
+  if (newIdx<0 || newIdx>=pages.length) return;
   currentPageIdx = newIdx;
   renderPage();
-  document.querySelector(".viewer-image-pane").scrollTop = 0;
-}}
+}};
 
-// 키보드 네비게이션
+// ── 전사 저장 ─────────────────────────────────────────────────────────────
+window.saveTranscription = async function() {{
+  const pages = currentVol?.pages||[];
+  if (!pages.length) return;
+  const page = pages[currentPageIdx];
+  const text = document.getElementById("trans-area").value.trim();
+  const author = document.getElementById("trans-nick").value.trim() || "익명";
+  const btn = document.getElementById("trans-save");
+  if (!text) {{ alert("내용을 입력해주세요."); return; }}
+  btn.disabled = true; btn.textContent = "저장 중...";
+  try {{
+    await setDoc(doc(db, "transcriptions", pageKey(page)), {{
+      text, author, updated_at: serverTimestamp(),
+      volume_id: page.volume_id, page_label: page.page_label
+    }});
+    document.getElementById("trans-meta").textContent = `${{author}} · 방금 저장됨`;
+    btn.textContent = "저장 완료!";
+    setTimeout(()=>{{ btn.disabled=false; btn.textContent="저장"; }}, 1500);
+  }} catch(e) {{
+    alert("저장 실패: " + e.message);
+    btn.disabled=false; btn.textContent="저장";
+  }}
+}};
+
+// ── 댓글 제출 ─────────────────────────────────────────────────────────────
+window.submitComment = async function() {{
+  const pages = currentVol?.pages||[];
+  if (!pages.length) return;
+  const page = pages[currentPageIdx];
+  const text = document.getElementById("comment-text").value.trim();
+  const author = document.getElementById("comment-nick").value.trim() || "익명";
+  if (!text) {{ alert("댓글 내용을 입력해주세요."); return; }}
+  try {{
+    await addDoc(collection(db, "comments", pageKey(page), "items"), {{
+      text, author, created_at: serverTimestamp()
+    }});
+    document.getElementById("comment-text").value = "";
+  }} catch(e) {{
+    alert("댓글 저장 실패: " + e.message);
+  }}
+}};
+
+// ── 키보드 ────────────────────────────────────────────────────────────────
 document.addEventListener("keydown", e => {{
-  if (document.getElementById("viewer-view").style.display === "flex") {{
-    if (e.key === "ArrowLeft" || e.key === "ArrowUp") changePage(-1);
-    if (e.key === "ArrowRight" || e.key === "ArrowDown") changePage(1);
-    if (e.key === "Escape") showHome();
+  const active = document.activeElement;
+  const typing = active && (active.tagName==="TEXTAREA"||active.tagName==="INPUT");
+  if (document.getElementById("viewer-view").style.display==="flex" && !typing) {{
+    if (e.key==="ArrowLeft"||e.key==="ArrowUp") changePage(-1);
+    if (e.key==="ArrowRight"||e.key==="ArrowDown") changePage(1);
+    if (e.key==="Escape") showHome();
   }}
 }});
 
 // ── 검색 ──────────────────────────────────────────────────────────────────
-function onSearch(query) {{
+window.onSearch = function(query) {{
   if (!query.trim()) {{ showHome(); return; }}
-
   document.getElementById("home-view").style.display = "none";
   document.getElementById("viewer-view").style.display = "none";
-  const sv = document.getElementById("search-view");
-  sv.style.display = "block";
-
+  document.getElementById("search-view").style.display = "block";
   const q = query.toLowerCase();
   const results = [];
-
   VOLUMES.forEach(vol => {{
-    (vol.pages || []).forEach((page, idx) => {{
-      const text = [page.content, page.author, page.date, page.summary, ...(page.tags||[])].join(" ").toLowerCase();
-      if (text.includes(q)) results.push({{vol, page, idx}});
+    (vol.pages||[]).forEach((page, idx) => {{
+      if ((vol.title+page.page_label+page.filename).toLowerCase().includes(q))
+        results.push({{vol, page, idx}});
     }});
   }});
-
-  function hl(str) {{
-    if (!str) return "";
-    return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-      .replace(new RegExp(q.replace(/[.*+?^${{}}()|[\\]\\\\]/g,"\\\\$&"), "gi"), m => `<mark>${{m}}</mark>`);
-  }}
-
-  let html = `<h2 style="font-size:1rem;color:#6b5a48;margin-bottom:16px">"${{query}}" 검색 결과 — ${{results.length}}건</h2>`;
-  if (results.length === 0) {{
-    html += `<p style="color:#aaa;font-style:italic">검색 결과가 없습니다.</p>`;
-  }} else {{
-    results.forEach(({{vol, page, idx}}) => {{
-      const label = page.page_label === "cover_front" ? "앞표지" :
-                    page.page_label === "cover_back" ? "뒷표지" : `${{idx+1}}페이지`;
-      html += `<div class="result-card" onclick="openVolume('${{vol.id}}', ${{idx}})">
-        <div class="result-vol">${{vol.title}} · ${{label}}</div>
-        ${{page.author ? `<span style="background:#f0e8dc;padding:2px 8px;border-radius:10px;font-size:.8rem">✍ ${{hl(page.author)}}</span>` : ""}}
-        ${{page.summary ? `<div class="result-summary">${{hl(page.summary)}}</div>` : ""}}
-        ${{page.content ? `<div class="result-content">${{hl(page.content)}}</div>` : ""}}
-      </div>`;
-    }});
-  }}
+  const sv = document.getElementById("search-view");
+  let html = `<p style="font-size:.9rem;color:#6b5a48;margin-bottom:14px">"${{query}}" 검색 결과 — ${{results.length}}건</p>`;
+  if (!results.length) html += `<p style="color:#aaa;font-style:italic">결과 없음</p>`;
+  else results.forEach(({{vol,page,idx}}) => {{
+    const label = page.page_label==="cover_front"?"앞표지":page.page_label==="cover_back"?"뒷표지":`${{idx+1}}페이지`;
+    html += `<div class="result-card" onclick="openVolume('${{vol.id}}',${{idx}})"><div class="result-vol">${{vol.title}} · ${{label}}</div></div>`;
+  }});
   sv.innerHTML = html;
-}}
+}};
 
 // ── 초기화 ────────────────────────────────────────────────────────────────
 showHome();
