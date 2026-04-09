@@ -49,22 +49,8 @@ body{font-family:"Malgun Gothic","Apple Gothic",sans-serif;background:#f5f0e8;co
 .page-btn:disabled{opacity:.3;cursor:default}
 .page-indicator{font-size:.85rem;color:#6b5a48;min-width:80px;text-align:center}
 .viewer-body{flex:1;display:flex;overflow:hidden}
-.viewer-image-pane{flex:1;overflow:auto;background:#2a2a2a;display:flex;align-items:center;justify-content:center;padding:16px}
-.viewer-image-pane img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.5)}
-.viewer-text-pane{width:380px;flex-shrink:0;overflow-y:auto;background:#fffdf7;border-left:1px solid #e0d0bc;padding:20px}
-.text-pane-section{margin-bottom:20px}
-.text-pane-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9b8870;margin-bottom:6px}
-.text-author{background:#f0e8dc;padding:4px 10px;border-radius:12px;font-size:.9rem;color:#3d2b1f;display:inline-block}
-.text-date{color:#6b5a48;font-size:.9rem}
-.text-summary{font-size:.9rem;line-height:1.7;color:#444}
-.text-content{font-size:.85rem;line-height:1.8;color:#555;white-space:pre-wrap;word-break:break-all;background:#f9f5ef;border-radius:8px;padding:14px;border:1px solid #ebe0ce}
-.text-tags{display:flex;flex-wrap:wrap;gap:6px}
-.tag{font-size:.72rem;background:#ede3d3;color:#6b5344;padding:3px 10px;border-radius:12px}
-.mood-badge{display:inline-flex;align-items:center;gap:4px;font-size:.8rem;padding:3px 10px;border-radius:12px}
-.mood-positive{background:#e8f5e8;color:#2d6b2d}
-.mood-neutral{background:#f5f0e0;color:#6b5a20}
-.mood-negative{background:#f5e8e8;color:#6b2020}
-.no-text{color:#aaa;font-style:italic;font-size:.85rem}
+.viewer-image-pane{flex:1;overflow:auto;background:#1a1a1a;display:flex;align-items:center;justify-content:center;padding:12px}
+.viewer-image-pane img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.6)}
 
 /* ── 검색 결과 ── */
 #search-view{display:none;max-width:900px;margin:0 auto;padding:24px 16px}
@@ -108,7 +94,6 @@ mark{background:#ffe066;border-radius:2px;padding:0 2px}
     <div class="viewer-image-pane">
       <img id="viewer-img" src="" alt="">
     </div>
-    <div class="viewer-text-pane" id="viewer-text"></div>
   </div>
 </div>
 
@@ -216,52 +201,6 @@ function renderPage() {
   document.getElementById("btn-prev").disabled = currentPageIdx === 0;
   document.getElementById("btn-next").disabled = currentPageIdx >= total - 1;
 
-  // 텍스트 패널
-  const mood = page.mood || "neutral";
-  const moodLabel = mood === "positive" ? "긍정적" : mood === "negative" ? "부정적" : "중립";
-  const moodClass = `mood-${mood}`;
-
-  let textHtml = "";
-
-  if (page.author) {
-    textHtml += `<div class="text-pane-section">
-      <div class="text-pane-label">작성자</div>
-      <span class="text-author">✍ ${page.author}</span>
-    </div>`;
-  }
-  if (page.date) {
-    textHtml += `<div class="text-pane-section">
-      <div class="text-pane-label">날짜</div>
-      <span class="text-date">📅 ${page.date}</span>
-    </div>`;
-  }
-  if (page.summary) {
-    textHtml += `<div class="text-pane-section">
-      <div class="text-pane-label">요약</div>
-      <div class="text-summary">${page.summary}</div>
-    </div>`;
-  }
-  if (page.content && page.content !== "텍스트 없음") {
-    const escaped = (page.content || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    textHtml += `<div class="text-pane-section">
-      <div class="text-pane-label">원문 전사</div>
-      <div class="text-content">${escaped}</div>
-    </div>`;
-  } else if (!page.content) {
-    textHtml += `<div class="text-pane-section"><p class="no-text">OCR 처리 전</p></div>`;
-  }
-  if ((page.tags || []).length > 0) {
-    textHtml += `<div class="text-pane-section">
-      <div class="text-pane-label">태그</div>
-      <div class="text-tags">${page.tags.map(t=>`<span class="tag">${t}</span>`).join("")}</div>
-    </div>`;
-  }
-  textHtml += `<div class="text-pane-section">
-    <div class="text-pane-label">분위기</div>
-    <span class="mood-badge ${moodClass}">${moodLabel}</span>
-  </div>`;
-
-  document.getElementById("viewer-text").innerHTML = textHtml;
 }
 
 function changePage(delta) {
