@@ -560,7 +560,10 @@ body{{font-family:"Malgun Gothic","Apple Gothic",sans-serif;background:#f5f0e8;c
 .page-indicator{{font-size:.82rem;color:#6b5a48;min-width:72px;text-align:center}}
 .viewer-body{{flex:1;display:flex;overflow:hidden}}
 .viewer-image-pane{{flex:1;overflow:auto;background:#1a1a1a;display:flex;align-items:flex-start;justify-content:center;padding:12px}}
-.viewer-image-pane img{{max-width:100%;object-fit:contain;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.6)}}
+.viewer-image-pane img{{max-width:100%;object-fit:contain;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.6);transition:transform .25s ease}}
+.viewer-image-pane img.rot90{{transform:rotate(90deg);max-width:calc(100vh - 120px)}}
+.viewer-image-pane img.rot180{{transform:rotate(180deg)}}
+.viewer-image-pane img.rot270{{transform:rotate(270deg);max-width:calc(100vh - 120px)}}
 .viewer-side{{width:360px;flex-shrink:0;overflow-y:auto;background:#fffdf7;border-left:1px solid #e0d0bc;display:flex;flex-direction:column}}
 .side-section{{padding:16px;border-bottom:1px solid #ede3d3}}
 .side-section:last-child{{border-bottom:none;flex:1}}
@@ -613,6 +616,10 @@ mark{{background:#ffe066;border-radius:2px;padding:0 2px}}
       <button class="page-btn" id="btn-prev" onclick="changePage(-1)">‹</button>
       <span class="page-indicator" id="page-indicator"></span>
       <button class="page-btn" id="btn-next" onclick="changePage(1)">›</button>
+    </div>
+    <div style="display:flex;gap:4px;margin-left:8px">
+      <button class="page-btn" onclick="rotateImage(-90)" title="왼쪽으로 회전">↺</button>
+      <button class="page-btn" onclick="rotateImage(90)" title="오른쪽으로 회전">↻</button>
     </div>
   </div>
   <div class="viewer-body">
@@ -739,7 +746,10 @@ async function renderPage() {{
   if (!total) return;
   const page = pages[currentPageIdx];
 
-  document.getElementById("viewer-img").src = `input/${{page.filename}}`;
+  const img = document.getElementById("viewer-img");
+  img.className = "";
+  img.src = `input/${{page.filename}}`;
+  img.onload = applyRotation;
   const label = page.page_label==="cover_front"?"앞표지":page.page_label==="cover_back"?"뒷표지":`${{currentPageIdx+1}} / ${{total}}`;
   document.getElementById("page-indicator").textContent = label;
   document.getElementById("btn-prev").disabled = currentPageIdx===0;
@@ -796,6 +806,30 @@ window.changePage = function(delta) {{
   if (newIdx<0 || newIdx>=pages.length) return;
   currentPageIdx = newIdx;
   renderPage();
+}};
+
+// ── 이미지 회전 ───────────────────────────────────────────────────────────
+function getRotKey() {{
+  const pages = currentVol?.pages||[];
+  if (!pages.length) return null;
+  return "rot__" + pages[currentPageIdx].filename;
+}}
+
+function applyRotation() {{
+  const key = getRotKey();
+  if (!key) return;
+  const deg = parseInt(localStorage.getItem(key)||"0");
+  const img = document.getElementById("viewer-img");
+  img.className = deg===90?"rot90":deg===180?"rot180":deg===270?"rot270":"";
+}}
+
+window.rotateImage = function(delta) {{
+  const key = getRotKey();
+  if (!key) return;
+  const cur = parseInt(localStorage.getItem(key)||"0");
+  const next = ((cur + delta) % 360 + 360) % 360;
+  localStorage.setItem(key, String(next));
+  applyRotation();
 }};
 
 // ── 전사 저장 ─────────────────────────────────────────────────────────────
