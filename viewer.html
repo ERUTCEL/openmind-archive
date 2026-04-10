@@ -132,13 +132,20 @@ mark{background:#ffe066;border-radius:2px;padding:0 2px}
       <div id="zoom-wrap"><img id="viewer-img" src="" alt="" draggable="false"></div>
     </div>
     <div class="viewer-side">
+      <!-- 닉네임 설정 -->
+      <div class="side-section" style="padding:10px 16px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:.75rem;color:#9b8870;white-space:nowrap">내 닉네임</span>
+          <input class="nick-input" id="global-nick" placeholder="닉네임 입력 후 Enter" maxlength="20" style="flex:1" onkeydown="if(event.key==='Enter')saveNick()">
+          <button class="save-btn" onclick="saveNick()" style="padding:4px 10px;font-size:.78rem">저장</button>
+        </div>
+      </div>
       <!-- 전사 섹션 -->
       <div class="side-section">
         <div class="side-label">✏️ 직접 전사 (내용 타이핑)</div>
         <textarea class="trans-area" id="trans-area" placeholder="이 페이지의 손글씨 내용을 읽어서 직접 입력해주세요..."></textarea>
         <div class="trans-meta" id="trans-meta"></div>
-        <div class="trans-footer">
-          <input class="nick-input" id="trans-nick" placeholder="닉네임 (선택)" maxlength="20">
+        <div class="trans-footer" style="justify-content:flex-end">
           <button class="save-btn" id="trans-save" onclick="saveTranscription()">저장</button>
         </div>
       </div>
@@ -147,7 +154,6 @@ mark{background:#ffe066;border-radius:2px;padding:0 2px}
         <div class="side-label">💬 댓글</div>
         <div class="comment-list" id="comment-list"><span class="loading-dot">불러오는 중...</span></div>
         <div class="comment-form">
-          <input class="comment-nick" id="comment-nick" placeholder="닉네임" maxlength="20">
           <textarea class="comment-text-input" id="comment-text" rows="2" placeholder="이 페이지에 대한 추억이나 기억을 남겨주세요..."></textarea>
           <button class="comment-submit" onclick="submitComment()">댓글 달기</button>
         </div>
@@ -429,13 +435,30 @@ window.rotateImage = function(delta) {
   pzFitAndCenter();
 };
 
+// ── 닉네임 ────────────────────────────────────────────────────────────────
+function getNick() {
+  return localStorage.getItem("user_nick") || "익명";
+}
+window.saveNick = function() {
+  const val = document.getElementById("global-nick").value.trim();
+  if (!val) return;
+  localStorage.setItem("user_nick", val);
+  document.getElementById("global-nick").value = val;
+  document.getElementById("global-nick").blur();
+};
+// 페이지 로드 시 저장된 닉네임 복원
+(function() {
+  const saved = localStorage.getItem("user_nick");
+  if (saved) document.getElementById("global-nick").value = saved;
+})();
+
 // ── 전사 저장 ─────────────────────────────────────────────────────────────
 window.saveTranscription = async function() {
   const pages = currentVol?.pages||[];
   if (!pages.length) return;
   const page = pages[currentPageIdx];
   const text = document.getElementById("trans-area").value.trim();
-  const author = document.getElementById("trans-nick").value.trim() || "익명";
+  const author = getNick();
   const btn = document.getElementById("trans-save");
   if (!text) { alert("내용을 입력해주세요."); return; }
   btn.disabled = true; btn.textContent = "저장 중...";
@@ -459,7 +482,7 @@ window.submitComment = async function() {
   if (!pages.length) return;
   const page = pages[currentPageIdx];
   const text = document.getElementById("comment-text").value.trim();
-  const author = document.getElementById("comment-nick").value.trim() || "익명";
+  const author = getNick();
   if (!text) { alert("댓글 내용을 입력해주세요."); return; }
   try {
     await addDoc(collection(db, "comments", pageKey(page), "items"), {
