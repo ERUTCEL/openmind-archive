@@ -76,6 +76,9 @@ mark{background:#ffe066;border-radius:2px;padding:0 2px}
 .mobile-controls{display:none}
 .toolbar-rotate{display:flex}
 .toolbar-zoom{display:flex}
+.admin-badge{background:#c0392b;color:#fff;font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:8px;vertical-align:middle}
+.comment-del{background:none;border:none;color:#ccc;cursor:pointer;font-size:.8rem;padding:2px 6px;border-radius:4px;float:right;line-height:1}
+.comment-del:hover{background:#fde8e8;color:#c0392b}
 .fav-btn{background:#f0e8dc;border:1px solid #c8b89a;color:#3d2b1f;width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;transition:background .15s}
 .fav-btn.active{background:#ffe0e0;border-color:#e8a0a0;color:#c0392b}
 .fav-section{margin-bottom:28px}
@@ -98,7 +101,7 @@ mark{background:#ffe066;border-radius:2px;padding:0 2px}
 </head>
 <body>
 <header class="site-header">
-  <h1 onclick="showHome()">열린마음 <span>아카이브</span></h1>
+  <h1 id="site-title" onclick="showHome()">열린마음 <span>아카이브</span><span class="admin-badge" id="admin-badge" style="display:none">ADMIN</span></h1>
   <div class="header-search">
     <span class="search-icon">🔍</span>
     <input type="text" id="global-search" placeholder="볼륨·페이지 검색..." oninput="onSearch(this.value)">
@@ -179,7 +182,7 @@ mark{background:#ffe066;border-radius:2px;padding:0 2px}
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBYA3D-MgA2MeTUgQOuDFdBZ4nz1iOzzXk",
@@ -345,8 +348,9 @@ async function renderPage() {
         const c = d.data();
         const ts = c.created_at?.toDate?.();
         const timeStr = ts ? ts.toLocaleDateString("ko-KR") + " " + ts.toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"}) : "";
+        const delBtn = isAdmin ? `<button class="comment-del" onclick="deleteComment('${key}','${d.id}')">삭제</button>` : "";
         return `<div class="comment-item">
-          <div class="comment-author">${c.author||"익명"}</div>
+          ${delBtn}<div class="comment-author">${c.author||"익명"}</div>
           <div class="comment-text">${c.text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
           <div class="comment-time">${timeStr}</div>
         </div>`;
@@ -471,6 +475,42 @@ window.rotateImage = function(delta) {
   pz.rotDeg = next;
   document.getElementById("viewer-img").style.transform = next ? `rotate(${next}deg)` : "";
   pzFitAndCenter();
+};
+
+// ── 관리자 ────────────────────────────────────────────────────────────────
+const ADMIN_PASSWORD = "yeollin1234"; // ← 비밀번호 변경 시 여기 수정
+let isAdmin = false;
+let adminClickCount = 0, adminClickTimer = null;
+
+document.getElementById("site-title").addEventListener("click", () => {
+  adminClickCount++;
+  clearTimeout(adminClickTimer);
+  adminClickTimer = setTimeout(() => { adminClickCount = 0; }, 2000);
+  if (adminClickCount >= 5) {
+    adminClickCount = 0;
+    if (isAdmin) { isAdmin = false; updateAdminUI(); return; }
+    const pw = prompt("관리자 비밀번호를 입력하세요");
+    if (pw === ADMIN_PASSWORD) { isAdmin = true; updateAdminUI(); alert("관리자 모드 활성화"); }
+    else if (pw !== null) alert("비밀번호가 틀렸습니다.");
+  }
+});
+
+function updateAdminUI() {
+  const badge = document.getElementById("admin-badge");
+  if (badge) badge.style.display = isAdmin ? "inline" : "none";
+  // 현재 댓글 목록 다시 그리기 (삭제 버튼 표시/숨김)
+  const pages = currentVol?.pages;
+  if (pages?.length) renderPage();
+}
+
+window.deleteComment = async function(pgKey, docId) {
+  if (!isAdmin) return;
+  if (!confirm("이 댓글을 삭제할까요?")) return;
+  try {
+    await deleteDoc(doc(db, "comments", pgKey, "items", docId));
+  } catch(e) {
+    alert("삭제 실패: " + e.message);
+  }
 };
 
 // ── 즐겨찾기 ──────────────────────────────────────────────────────────────
