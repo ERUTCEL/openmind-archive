@@ -352,7 +352,15 @@ async function renderPage() {
       const who = d.author ? `${d.author} · ` : "";
       document.getElementById("trans-meta").textContent = ts ? `${who}${ts.toLocaleDateString("ko-KR")} 마지막 수정` : (who ? who.slice(0,-3) : "");
     } else {
-      document.getElementById("trans-meta").textContent = "아직 전사된 내용이 없습니다. 직접 입력해주세요!";
+      // 수동 전사 없으면 OCR 레이블에서 불러오기
+      const labelSnap = await getDoc(doc(db, "labels", key));
+      if (labelSnap.exists()) {
+        const labels = labelSnap.data().labels || [];
+        document.getElementById("trans-area").value = assembleLabelText(labels);
+        document.getElementById("trans-meta").textContent = "OCR 자동 전사 (수정 후 저장하면 반영됩니다)";
+      } else {
+        document.getElementById("trans-meta").textContent = "아직 전사된 내용이 없습니다. 직접 입력해주세요!";
+      }
     }
   } catch(e) {
     document.getElementById("trans-meta").textContent = "";
@@ -694,6 +702,28 @@ window.onSearch = function(query) {
   });
   sv.innerHTML = html;
 };
+
+// 레이블 목록 → 읽기 순서 텍스트 조립
+function assembleLabelText(labels) {
+  if (!labels.length) return '';
+  const pairs = [...labels].sort((a,b) => (a.box[1]+a.box[3])/2 - (b.box[1]+b.box[3])/2);
+  const lines = [];
+  let cur = [], prevCy = null;
+  for (const {box, text} of pairs) {
+    const cy = (box[1]+box[3])/2;
+    const h = Math.max(box[3]-box[1], 1);
+    if (prevCy === null || Math.abs(cy-prevCy) < h*0.7) {
+      cur.push({x: box[0], text});
+    } else {
+      cur.sort((a,b)=>a.x-b.x);
+      lines.push(cur.map(c=>c.text).join(' '));
+      cur = [{x: box[0], text}];
+    }
+    prevCy = cy;
+  }
+  if (cur.length) { cur.sort((a,b)=>a.x-b.x); lines.push(cur.map(c=>c.text).join(' ')); }
+  return lines.join('\n');
+}
 
 // ── 레이블링 모드 ─────────────────────────────────────────────────────────
 const OCR_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
