@@ -742,35 +742,14 @@ async function startLabeling() {
   document.getElementById('label-count-txt').textContent = '분석 중...';
 
   try {
-    const sessionHash = Math.random().toString(36).substring(2);
-    const HF_SPACE = 'https://erutcel-yeollinmaeum-ocr.hf.space';
-
-    // Gradio 6.x 큐 API: 작업 등록
-    await fetch(`${HF_SPACE}/queue/join`, {
+    const res = await fetch('https://erutcel-yeollinmaeum-ocr.hf.space/api/get_labels', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({fn_index: 1, data: [base64], session_hash: sessionHash})
+      body: JSON.stringify({image: base64})
     });
-
-    // SSE로 결과 수신
-    const jsonText = await new Promise((resolve, reject) => {
-      const es = new EventSource(`${HF_SPACE}/queue/data?session_hash=${sessionHash}`);
-      es.onmessage = e => {
-        const msg = JSON.parse(e.data);
-        if (msg.msg === 'process_completed') {
-          es.close();
-          resolve(msg.output.data[0]);
-        } else if (msg.msg === 'queue_full' || msg.msg === 'process_errored') {
-          es.close();
-          reject(new Error(msg.msg));
-        }
-      };
-      es.onerror = () => { es.close(); reject(new Error('SSE 연결 실패')); };
-      setTimeout(() => { es.close(); reject(new Error('응답 시간 초과')); }, 120000);
-    });
-
-    const parsed = JSON.parse(jsonText);
-    labelBoxes = parsed.map(item => ({box: item.box, text: item.text, confirmed: false}));
+    const result = await res.json();
+    if (result.error) throw new Error(result.error);
+    labelBoxes = result.labels.map(item => ({box: item.box, text: item.text, confirmed: false}));
     drawLabelBoxes();
     updateLabelBar();
   } catch(e) {
