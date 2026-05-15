@@ -107,6 +107,23 @@ mark{background:#ffe066;border-radius:2px;padding:0 2px}
   .toolbar-extras{display:none}
   .mobile-controls{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 12px;background:#fff;border-bottom:1px solid #e0d0bc;flex-shrink:0}
 }
+/* 레이블링 모드 */
+.label-btn{background:#f0e8dc;border:1px solid #c8b89a;color:#3d2b1f;padding:4px 10px;border-radius:7px;cursor:pointer;font-size:.78rem;font-weight:600;white-space:nowrap}
+.label-btn.active{background:#3d2b1f;color:#f5efe4;border-color:#3d2b1f}
+#label-overlay{position:absolute;top:0;left:0;pointer-events:none;z-index:10}
+.label-box{position:absolute;border:2px solid rgba(255,80,80,.7);border-radius:3px;cursor:pointer;pointer-events:all;box-sizing:border-box}
+.label-box:hover{background:rgba(255,80,80,.1)}
+.label-box.confirmed{border-color:rgba(40,180,80,.8)}
+.label-box.confirmed:hover{background:rgba(40,180,80,.08)}
+.label-popup{position:fixed;background:#fff;border:1px solid #c8b89a;border-radius:10px;padding:12px;box-shadow:0 4px 20px rgba(0,0,0,.2);z-index:200;min-width:220px}
+.label-popup input{width:100%;padding:6px 8px;border:1px solid #d4c8b4;border-radius:6px;font-size:.9rem;font-family:inherit;outline:none;margin-bottom:8px}
+.label-popup-btns{display:flex;gap:6px}
+.label-popup-btns button{flex:1;padding:5px;border-radius:6px;border:none;cursor:pointer;font-size:.8rem;font-weight:600}
+.lp-confirm{background:#3d2b1f;color:#f5efe4}
+.lp-skip{background:#f0e8dc;color:#3d2b1f;border:1px solid #c8b89a !important}
+.lp-del{background:#fee;color:#c0392b;border:1px solid #f5c6c6 !important}
+#label-save-bar{display:none;position:fixed;bottom:20px;right:20px;background:#3d2b1f;color:#f5efe4;padding:10px 20px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.3);z-index:300;display:flex;align-items:center;gap:12px;font-size:.85rem}
+#label-save-bar button{background:#f5efe4;color:#3d2b1f;border:none;padding:5px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:.82rem}
 </style>
 </head>
 <body>
@@ -131,6 +148,7 @@ mark{background:#ffe066;border-radius:2px;padding:0 2px}
     </div>
     <div class="toolbar-extras">
       <button class="fav-btn" id="fav-btn" onclick="toggleFav()" title="즐겨찾기">🍏</button>
+      <button class="label-btn" id="label-btn" onclick="toggleLabelMode()" title="레이블링 모드" style="margin-left:8px">🏷 레이블</button>
       <div style="display:flex;gap:4px;margin-left:8px">
         <button class="page-btn" onclick="rotateImage(-90)" title="왼쪽으로 회전">↺</button>
         <button class="page-btn" onclick="rotateImage(90)" title="오른쪽으로 회전">↻</button>
@@ -157,6 +175,7 @@ mark{background:#ffe066;border-radius:2px;padding:0 2px}
   <div class="viewer-body">
     <div class="viewer-image-pane" id="viewer-pane">
       <div id="zoom-wrap"><img id="viewer-img" src="" alt="" draggable="false"></div>
+      <div id="label-overlay"></div>
     </div>
     <div class="viewer-side">
       <!-- 전사 섹션 -->
@@ -677,6 +696,191 @@ window.onSearch = function(query) {
 
 // ── 초기화 ────────────────────────────────────────────────────────────────
 showHome();
+window._db = db;
+window._doc = doc;
+window._setDoc = setDoc;
+</script>
+
+<!-- 레이블링 저장바 -->
+<div id="label-save-bar" style="display:none">
+  <span id="label-count-txt">0개 확인됨</span>
+  <button onclick="saveLabelData()">Firestore 저장</button>
+  <button onclick="toggleLabelMode()" style="background:#888;color:#fff">닫기</button>
+</div>
+
+<script>
+// ── 레이블링 모드 ─────────────────────────────────────────────────────────
+const OCR_API = 'https://erutcel-yeollinmaeum-ocr.hf.space/run/predict';
+let labelMode = false;
+let labelBoxes = [];  // [{box:[lx,ly,rx,ry], text:'', confirmed:false}]
+
+function toggleLabelMode() {
+  labelMode = !labelMode;
+  document.getElementById('label-btn').classList.toggle('active', labelMode);
+  document.getElementById('label-save-bar').style.display = labelMode ? 'flex' : 'none';
+  if (labelMode) {
+    startLabeling();
+  } else {
+    clearLabelOverlay();
+    labelBoxes = [];
+  }
+}
+
+async function startLabeling() {
+  const img = document.getElementById('viewer-img');
+  clearLabelOverlay();
+  labelBoxes = [];
+  updateLabelBar();
+
+  // 이미지 → base64
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  canvas.getContext('2d').drawImage(img, 0, 0);
+  const base64 = canvas.toDataURL('image/jpeg', 0.9);
+
+  document.getElementById('label-count-txt').textContent = '분석 중...';
+
+  try {
+    // Gradio 레이블링 탭은 index 1
+    const res = await fetch('https://erutcel-yeollinmaeum-ocr.hf.space/run/predict', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({fn_index: 1, data: [base64]})
+    });
+    const result = await res.json();
+    const parsed = JSON.parse(result.data[0]);
+    labelBoxes = parsed.map(item => ({box: item.box, text: item.text, confirmed: false}));
+    drawLabelBoxes();
+    updateLabelBar();
+  } catch(e) {
+    document.getElementById('label-count-txt').textContent = '오류: ' + e.message;
+  }
+}
+
+function drawLabelBoxes() {
+  const img = document.getElementById('viewer-img');
+  const wrap = document.getElementById('zoom-wrap');
+  const overlay = document.getElementById('label-overlay');
+  overlay.innerHTML = '';
+
+  // zoom-wrap의 현재 transform scale 파악
+  const wrapStyle = window.getComputedStyle(wrap);
+  const matrix = new DOMMatrix(wrapStyle.transform);
+  const scale = matrix.a || 1;
+
+  const imgW = img.naturalWidth;
+  const imgH = img.naturalHeight;
+  const dispW = img.offsetWidth;
+  const dispH = img.offsetHeight;
+  const scaleX = dispW / imgW;
+  const scaleY = dispH / imgH;
+
+  labelBoxes.forEach((item, i) => {
+    const [lx, ly, rx, ry] = item.box;
+    const el = document.createElement('div');
+    el.className = 'label-box' + (item.confirmed ? ' confirmed' : '');
+    el.style.left = (lx * scaleX) + 'px';
+    el.style.top = (ly * scaleY) + 'px';
+    el.style.width = ((rx - lx) * scaleX) + 'px';
+    el.style.height = ((ry - ly) * scaleY) + 'px';
+    el.title = item.text || '(빈 텍스트)';
+    el.onclick = (e) => { e.stopPropagation(); openLabelPopup(i, el); };
+    overlay.appendChild(el);
+  });
+}
+
+function clearLabelOverlay() {
+  document.getElementById('label-overlay').innerHTML = '';
+  closeLabelPopup();
+}
+
+let activePopup = null;
+function openLabelPopup(idx, boxEl) {
+  closeLabelPopup();
+  const item = labelBoxes[idx];
+  const popup = document.createElement('div');
+  popup.className = 'label-popup';
+
+  const rect = boxEl.getBoundingClientRect();
+  popup.style.left = Math.min(rect.right + 8, window.innerWidth - 240) + 'px';
+  popup.style.top = Math.max(rect.top, 8) + 'px';
+
+  popup.innerHTML = `
+    <div style="font-size:.72rem;color:#888;margin-bottom:6px">박스 #${idx+1} 텍스트 수정</div>
+    <input id="lp-input" value="${item.text}" placeholder="텍스트 입력">
+    <div class="label-popup-btns">
+      <button class="lp-confirm" onclick="confirmLabel(${idx})">확인</button>
+      <button class="lp-skip" onclick="closeLabelPopup()">닫기</button>
+      <button class="lp-del" onclick="deleteLabel(${idx})">삭제</button>
+    </div>
+  `;
+  document.body.appendChild(popup);
+  activePopup = popup;
+  popup.querySelector('#lp-input').focus();
+  popup.querySelector('#lp-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmLabel(idx);
+    if (e.key === 'Escape') closeLabelPopup();
+  });
+}
+
+function confirmLabel(idx) {
+  const val = document.getElementById('lp-input')?.value ?? '';
+  labelBoxes[idx].text = val;
+  labelBoxes[idx].confirmed = true;
+  closeLabelPopup();
+  drawLabelBoxes();
+  updateLabelBar();
+}
+
+function deleteLabel(idx) {
+  labelBoxes.splice(idx, 1);
+  closeLabelPopup();
+  drawLabelBoxes();
+  updateLabelBar();
+}
+
+function closeLabelPopup() {
+  if (activePopup) { activePopup.remove(); activePopup = null; }
+}
+
+function updateLabelBar() {
+  const confirmed = labelBoxes.filter(b => b.confirmed).length;
+  document.getElementById('label-count-txt').textContent =
+    `${confirmed} / ${labelBoxes.length}개 확인됨`;
+}
+
+async function saveLabelData() {
+  const confirmed = labelBoxes.filter(b => b.confirmed);
+  if (!confirmed.length) { alert('확인된 레이블이 없어요.'); return; }
+
+  const pages = currentVol?.pages || [];
+  const page = pages[currentPageIdx];
+  if (!page) return;
+
+  const key = currentVol.id + '_' + page.filename;
+  const data = {
+    volId: currentVol.id,
+    filename: page.filename,
+    labels: confirmed.map(b => ({box: b.box, text: b.text})),
+    savedAt: new Date().toISOString()
+  };
+
+  try {
+    await window._setDoc(window._doc(window._db, 'labels', key), data);
+    alert(`저장 완료 (${confirmed.length}개)`);
+  } catch(e) {
+    alert('저장 실패: ' + e.message);
+  }
+}
+
+// 페이지 변경 시 오버레이 초기화
+const _origChangePage = window.changePage;
+window.changePage = function(delta) {
+  if (labelMode) { clearLabelOverlay(); labelBoxes = []; }
+  _origChangePage(delta);
+  if (labelMode) setTimeout(startLabeling, 800);
+};
 </script>
 </body>
 </html>
