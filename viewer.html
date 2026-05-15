@@ -742,19 +742,16 @@ async function startLabeling() {
   document.getElementById('label-count-txt').textContent = '분석 중...';
 
   try {
-    // Gradio 레이블링 탭은 index 1
-    const res = await fetch('https://erutcel-yeollinmaeum-ocr.hf.space/run/predict', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({fn_index: 1, data: [base64]})
-    });
-    const result = await res.json();
+    const { Client } = await import("https://cdn.jsdelivr.net/npm/@gradio/client@1/dist/index.min.js");
+    const client = await Client.connect("erutcel/yeollinmaeum-ocr");
+    const result = await client.predict("/get_labels", { image: base64 });
     const parsed = JSON.parse(result.data[0]);
     labelBoxes = parsed.map(item => ({box: item.box, text: item.text, confirmed: false}));
     drawLabelBoxes();
     updateLabelBar();
   } catch(e) {
     document.getElementById('label-count-txt').textContent = '오류: ' + e.message;
+    console.error('레이블링 API 오류:', e);
   }
 }
 
