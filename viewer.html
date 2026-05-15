@@ -412,6 +412,7 @@ window.changePage = function(delta) {
   const pages = currentVol?.pages||[];
   const newIdx = currentPageIdx + delta;
   if (newIdx<0 || newIdx>=pages.length) return;
+  if (labelMode) { clearLabelOverlay(); labelBoxes = []; updateLabelBar(); }
   currentPageIdx = newIdx;
   renderPage();
 };
@@ -694,38 +695,23 @@ window.onSearch = function(query) {
   sv.innerHTML = html;
 };
 
-// ── 초기화 ────────────────────────────────────────────────────────────────
-showHome();
-window._db = db;
-window._doc = doc;
-window._setDoc = setDoc;
-</script>
-
-<!-- 레이블링 저장바 -->
-<div id="label-save-bar" style="display:none">
-  <span id="label-count-txt">0개 확인됨</span>
-  <button onclick="saveLabelData()">Firestore 저장</button>
-  <button onclick="toggleLabelMode()" style="background:#888;color:#fff">닫기</button>
-</div>
-
-<script>
 // ── 레이블링 모드 ─────────────────────────────────────────────────────────
 const OCR_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
   ? 'http://localhost:7860'
   : 'https://erutcel-yeollinmaeum-ocr.hf.space';
 let labelMode = false;
-let labelBoxes = [];  // [{box:[lx,ly,rx,ry], text:'', confirmed:false}]
+let labelBoxes = [];
 
-// 드래그 선택 박스 (pane 좌표계, zoom에 영향받지 않음)
+// 드래그 선택 박스 (pane 좌표계 — zoom 변환 밖)
 const _selBox = document.createElement('div');
 Object.assign(_selBox.style, {
   position:'absolute', border:'2px dashed #f55', background:'rgba(255,80,80,.08)',
   pointerEvents:'none', display:'none', zIndex:'20', boxSizing:'border-box'
 });
-document.getElementById('viewer-pane').appendChild(_selBox);
+_vpane.appendChild(_selBox);
 let _selStart = null;
 
-function toggleLabelMode() {
+window.toggleLabelMode = function() {
   labelMode = !labelMode;
   document.getElementById('label-btn').classList.toggle('active', labelMode);
   document.getElementById('label-save-bar').style.display = labelMode ? 'flex' : 'none';
@@ -733,11 +719,9 @@ function toggleLabelMode() {
     document.getElementById('label-count-txt').textContent = '드래그로 텍스트 영역을 선택하세요';
     _vpane.style.cursor = 'crosshair';
   } else {
-    clearLabelOverlay();
-    labelBoxes = [];
-    _vpane.style.cursor = '';
+    clearLabelOverlay(); labelBoxes = []; _vpane.style.cursor = '';
   }
-}
+};
 
 // 드래그 시작
 _vpane.addEventListener('mousedown', e => {
@@ -753,8 +737,8 @@ document.addEventListener('mousemove', e => {
   if (!labelMode || !_selStart) return;
   const rect = _vpane.getBoundingClientRect();
   const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
-  _selBox.style.left = Math.min(_selStart.x, cx) + 'px';
-  _selBox.style.top  = Math.min(_selStart.y, cy) + 'px';
+  _selBox.style.left   = Math.min(_selStart.x, cx) + 'px';
+  _selBox.style.top    = Math.min(_selStart.y, cy) + 'px';
   _selBox.style.width  = Math.abs(cx - _selStart.x) + 'px';
   _selBox.style.height = Math.abs(cy - _selStart.y) + 'px';
 });
@@ -769,7 +753,6 @@ document.addEventListener('mouseup', e => {
   const px2 = Math.max(_selStart.x, cx), py2 = Math.max(_selStart.y, cy);
   _selStart = null;
   if (px2 - px1 < 8 || py2 - py1 < 8) return;
-  // pane 좌표 → 원본 이미지 픽셀 좌표
   const ix1 = Math.round((px1 - pz.panX) / pz.zoom);
   const iy1 = Math.round((py1 - pz.panY) / pz.zoom);
   const ix2 = Math.round((px2 - pz.panX) / pz.zoom);
@@ -802,8 +785,7 @@ async function cropAndOCR(ix1, iy1, ix2, iy2) {
     if (result.error) throw new Error(result.error);
     const text = (result.labels||[]).map(l=>l.text).join(' ').trim();
     labelBoxes[tmpIdx].text = text;
-    drawLabelBoxes();
-    updateLabelBar();
+    drawLabelBoxes(); updateLabelBar();
     const boxEl = document.getElementById('label-overlay').children[tmpIdx];
     if (boxEl) openLabelPopup(tmpIdx, boxEl);
   } catch(e) {
@@ -815,32 +797,17 @@ async function cropAndOCR(ix1, iy1, ix2, iy2) {
 
 function drawLabelBoxes() {
   const img = document.getElementById('viewer-img');
-  const wrap = document.getElementById('zoom-wrap');
   const overlay = document.getElementById('label-overlay');
   overlay.innerHTML = '';
-
-  // zoom-wrap의 현재 transform scale 파악
-  const wrapStyle = window.getComputedStyle(wrap);
-  const matrix = new DOMMatrix(wrapStyle.transform);
-  const scale = matrix.a || 1;
-
-  const imgW = img.naturalWidth;
-  const imgH = img.naturalHeight;
-  const dispW = img.offsetWidth;
-  const dispH = img.offsetHeight;
-  const scaleX = dispW / imgW;
-  const scaleY = dispH / imgH;
-
+  const scaleX = img.offsetWidth / img.naturalWidth || 1;
+  const scaleY = img.offsetHeight / img.naturalHeight || 1;
   labelBoxes.forEach((item, i) => {
     const [lx, ly, rx, ry] = item.box;
     const el = document.createElement('div');
     el.className = 'label-box' + (item.confirmed ? ' confirmed' : '');
-    el.style.left = (lx * scaleX) + 'px';
-    el.style.top = (ly * scaleY) + 'px';
-    el.style.width = ((rx - lx) * scaleX) + 'px';
-    el.style.height = ((ry - ly) * scaleY) + 'px';
+    el.style.cssText = `left:${lx*scaleX}px;top:${ly*scaleY}px;width:${(rx-lx)*scaleX}px;height:${(ry-ly)*scaleY}px`;
     el.title = item.text || '(빈 텍스트)';
-    el.onclick = (e) => { e.stopPropagation(); openLabelPopup(i, el); };
+    el.onclick = e => { e.stopPropagation(); openLabelPopup(i, el); };
     overlay.appendChild(el);
   });
 }
@@ -856,85 +823,76 @@ function openLabelPopup(idx, boxEl) {
   const item = labelBoxes[idx];
   const popup = document.createElement('div');
   popup.className = 'label-popup';
-
   const rect = boxEl.getBoundingClientRect();
   popup.style.left = Math.min(rect.right + 8, window.innerWidth - 240) + 'px';
-  popup.style.top = Math.max(rect.top, 8) + 'px';
-
+  popup.style.top  = Math.max(rect.top, 8) + 'px';
   popup.innerHTML = `
     <div style="font-size:.72rem;color:#888;margin-bottom:6px">박스 #${idx+1} 텍스트 수정</div>
-    <input id="lp-input" value="${item.text}" placeholder="텍스트 입력">
+    <input id="lp-input" value="${item.text.replace(/"/g,'&quot;')}" placeholder="텍스트 입력">
     <div class="label-popup-btns">
-      <button class="lp-confirm" onclick="confirmLabel(${idx})">확인</button>
-      <button class="lp-skip" onclick="closeLabelPopup()">닫기</button>
-      <button class="lp-del" onclick="deleteLabel(${idx})">삭제</button>
-    </div>
-  `;
+      <button class="lp-confirm" onclick="window.confirmLabel(${idx})">확인</button>
+      <button class="lp-skip"    onclick="window.closeLabelPopup()">닫기</button>
+      <button class="lp-del"     onclick="window.deleteLabel(${idx})">삭제</button>
+    </div>`;
   document.body.appendChild(popup);
   activePopup = popup;
   popup.querySelector('#lp-input').focus();
   popup.querySelector('#lp-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') confirmLabel(idx);
-    if (e.key === 'Escape') closeLabelPopup();
+    if (e.key==='Enter') window.confirmLabel(idx);
+    if (e.key==='Escape') window.closeLabelPopup();
   });
 }
 
-function confirmLabel(idx) {
+window.confirmLabel = function(idx) {
   const val = document.getElementById('lp-input')?.value ?? '';
   labelBoxes[idx].text = val;
   labelBoxes[idx].confirmed = true;
-  closeLabelPopup();
-  drawLabelBoxes();
-  updateLabelBar();
-}
-
-function deleteLabel(idx) {
+  closeLabelPopup(); drawLabelBoxes(); updateLabelBar();
+};
+window.deleteLabel = function(idx) {
   labelBoxes.splice(idx, 1);
-  closeLabelPopup();
-  drawLabelBoxes();
-  updateLabelBar();
-}
-
-function closeLabelPopup() {
+  closeLabelPopup(); drawLabelBoxes(); updateLabelBar();
+};
+window.closeLabelPopup = function() {
   if (activePopup) { activePopup.remove(); activePopup = null; }
-}
+};
+function closeLabelPopup() { window.closeLabelPopup(); }
 
 function updateLabelBar() {
-  const confirmed = labelBoxes.filter(b => b.confirmed).length;
-  document.getElementById('label-count-txt').textContent =
-    `${confirmed} / ${labelBoxes.length}개 확인됨`;
+  const confirmed = labelBoxes.filter(b=>b.confirmed).length;
+  document.getElementById('label-count-txt').textContent = `${confirmed} / ${labelBoxes.length}개 확인됨`;
 }
 
-async function saveLabelData() {
-  const confirmed = labelBoxes.filter(b => b.confirmed);
+window.saveLabelData = async function() {
+  const confirmed = labelBoxes.filter(b=>b.confirmed);
   if (!confirmed.length) { alert('확인된 레이블이 없어요.'); return; }
-
-  const pages = currentVol?.pages || [];
+  const pages = currentVol?.pages||[];
   const page = pages[currentPageIdx];
   if (!page) return;
-
   const key = currentVol.id + '_' + page.filename;
   const data = {
-    volId: currentVol.id,
-    filename: page.filename,
-    labels: confirmed.map(b => ({box: b.box, text: b.text})),
+    volId: currentVol.id, filename: page.filename,
+    labels: confirmed.map(b=>({box:b.box, text:b.text})),
     savedAt: new Date().toISOString()
   };
-
   try {
-    await window._setDoc(window._doc(window._db, 'labels', key), data);
+    await setDoc(doc(db, 'labels', key), data);
     alert(`저장 완료 (${confirmed.length}개)`);
-  } catch(e) {
-    alert('저장 실패: ' + e.message);
-  }
-}
-
-// 페이지 변경 시 오버레이 초기화
-const _origChangePage = window.changePage;
-window.changePage = function(delta) {
-  if (labelMode) { clearLabelOverlay(); labelBoxes = []; updateLabelBar(); }
-  _origChangePage(delta);
+  } catch(e) { alert('저장 실패: ' + e.message); }
 };
+
+// ── 초기화 ────────────────────────────────────────────────────────────────
+showHome();
+window._db = db;
+window._doc = doc;
+window._setDoc = setDoc;
 </script>
+
+<!-- 레이블링 저장바 -->
+<div id="label-save-bar" style="display:none">
+  <span id="label-count-txt">0개 확인됨</span>
+  <button onclick="window.saveLabelData()">Firestore 저장</button>
+  <button onclick="window.toggleLabelMode()" style="background:#888;color:#fff">닫기</button>
+</div>
 </body>
 </html>
