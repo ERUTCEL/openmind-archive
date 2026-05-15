@@ -457,7 +457,7 @@ function pzZoomAt(delta, cx, cy) {
 // 드래그 패닝
 const _vpane = document.getElementById("viewer-pane");
 _vpane.addEventListener("mousedown", e => {
-  if (e.button!==0) return;
+  if (e.button!==0 || labelMode) return;
   _pzDrag=true; _pzLast={x:e.clientX,y:e.clientY};
   _vpane.classList.add("panning"); e.preventDefault();
 });
@@ -716,47 +716,100 @@ const OCR_BASE = (location.hostname === 'localhost' || location.hostname === '12
 let labelMode = false;
 let labelBoxes = [];  // [{box:[lx,ly,rx,ry], text:'', confirmed:false}]
 
+// 드래그 선택 박스 (pane 좌표계, zoom에 영향받지 않음)
+const _selBox = document.createElement('div');
+Object.assign(_selBox.style, {
+  position:'absolute', border:'2px dashed #f55', background:'rgba(255,80,80,.08)',
+  pointerEvents:'none', display:'none', zIndex:'20', boxSizing:'border-box'
+});
+document.getElementById('viewer-pane').appendChild(_selBox);
+let _selStart = null;
+
 function toggleLabelMode() {
   labelMode = !labelMode;
   document.getElementById('label-btn').classList.toggle('active', labelMode);
   document.getElementById('label-save-bar').style.display = labelMode ? 'flex' : 'none';
   if (labelMode) {
-    startLabeling();
+    document.getElementById('label-count-txt').textContent = '드래그로 텍스트 영역을 선택하세요';
+    _vpane.style.cursor = 'crosshair';
   } else {
     clearLabelOverlay();
     labelBoxes = [];
+    _vpane.style.cursor = '';
   }
 }
 
-async function startLabeling() {
+// 드래그 시작
+_vpane.addEventListener('mousedown', e => {
+  if (!labelMode || e.button !== 0) return;
+  e.preventDefault();
+  const rect = _vpane.getBoundingClientRect();
+  _selStart = {x: e.clientX - rect.left, y: e.clientY - rect.top};
+  Object.assign(_selBox.style, {display:'block', left:_selStart.x+'px', top:_selStart.y+'px', width:'0', height:'0'});
+});
+
+// 드래그 중
+document.addEventListener('mousemove', e => {
+  if (!labelMode || !_selStart) return;
+  const rect = _vpane.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  _selBox.style.left = Math.min(_selStart.x, cx) + 'px';
+  _selBox.style.top  = Math.min(_selStart.y, cy) + 'px';
+  _selBox.style.width  = Math.abs(cx - _selStart.x) + 'px';
+  _selBox.style.height = Math.abs(cy - _selStart.y) + 'px';
+});
+
+// 드래그 끝 → 크롭 OCR
+document.addEventListener('mouseup', e => {
+  if (!labelMode || !_selStart) return;
+  const rect = _vpane.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  _selBox.style.display = 'none';
+  const px1 = Math.min(_selStart.x, cx), py1 = Math.min(_selStart.y, cy);
+  const px2 = Math.max(_selStart.x, cx), py2 = Math.max(_selStart.y, cy);
+  _selStart = null;
+  if (px2 - px1 < 8 || py2 - py1 < 8) return;
+  // pane 좌표 → 원본 이미지 픽셀 좌표
+  const ix1 = Math.round((px1 - pz.panX) / pz.zoom);
+  const iy1 = Math.round((py1 - pz.panY) / pz.zoom);
+  const ix2 = Math.round((px2 - pz.panX) / pz.zoom);
+  const iy2 = Math.round((py2 - pz.panY) / pz.zoom);
+  cropAndOCR(ix1, iy1, ix2, iy2);
+});
+
+async function cropAndOCR(ix1, iy1, ix2, iy2) {
   const img = document.getElementById('viewer-img');
-  clearLabelOverlay();
-  labelBoxes = [];
-  updateLabelBar();
+  const lx = Math.max(0, ix1), ly = Math.max(0, iy1);
+  const rx = Math.min(img.naturalWidth, ix2), ry = Math.min(img.naturalHeight, iy2);
+  if (rx <= lx || ry <= ly) return;
 
-  // 이미지 → base64
   const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  canvas.getContext('2d').drawImage(img, 0, 0);
-  const base64 = canvas.toDataURL('image/jpeg', 0.9);
+  canvas.width = rx - lx; canvas.height = ry - ly;
+  canvas.getContext('2d').drawImage(img, lx, ly, rx-lx, ry-ly, 0, 0, rx-lx, ry-ly);
+  const base64 = canvas.toDataURL('image/jpeg', 0.92);
 
-  document.getElementById('label-count-txt').textContent = '분석 중...';
+  const tmpIdx = labelBoxes.length;
+  labelBoxes.push({box:[lx,ly,rx,ry], text:'', confirmed:false});
+  drawLabelBoxes();
+  document.getElementById('label-count-txt').textContent = 'OCR 중...';
 
   try {
     const res = await fetch(`${OCR_BASE}/api/get_labels`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({image: base64})
     });
     const result = await res.json();
     if (result.error) throw new Error(result.error);
-    labelBoxes = result.labels.map(item => ({box: item.box, text: item.text, confirmed: false}));
+    const text = (result.labels||[]).map(l=>l.text).join(' ').trim();
+    labelBoxes[tmpIdx].text = text;
     drawLabelBoxes();
     updateLabelBar();
+    const boxEl = document.getElementById('label-overlay').children[tmpIdx];
+    if (boxEl) openLabelPopup(tmpIdx, boxEl);
   } catch(e) {
+    labelBoxes.splice(tmpIdx, 1);
+    drawLabelBoxes();
     document.getElementById('label-count-txt').textContent = '오류: ' + e.message;
-    console.error('레이블링 API 오류:', e);
   }
 }
 
@@ -879,9 +932,8 @@ async function saveLabelData() {
 // 페이지 변경 시 오버레이 초기화
 const _origChangePage = window.changePage;
 window.changePage = function(delta) {
-  if (labelMode) { clearLabelOverlay(); labelBoxes = []; }
+  if (labelMode) { clearLabelOverlay(); labelBoxes = []; updateLabelBar(); }
   _origChangePage(delta);
-  if (labelMode) setTimeout(startLabeling, 800);
 };
 </script>
 </body>
