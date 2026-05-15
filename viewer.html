@@ -710,7 +710,9 @@ window._setDoc = setDoc;
 
 <script>
 // ── 레이블링 모드 ─────────────────────────────────────────────────────────
-const OCR_API = 'https://erutcel-yeollinmaeum-ocr.hf.space/run/predict';
+const OCR_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:7860'
+  : 'https://erutcel-yeollinmaeum-ocr.hf.space';
 let labelMode = false;
 let labelBoxes = [];  // [{box:[lx,ly,rx,ry], text:'', confirmed:false}]
 
@@ -742,7 +744,7 @@ async function startLabeling() {
   document.getElementById('label-count-txt').textContent = '분석 중...';
 
   try {
-    const res = await fetch('https://erutcel-yeollinmaeum-ocr.hf.space/api/get_labels', {
+    const res = await fetch(`${OCR_BASE}/api/get_labels`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({image: base64})
